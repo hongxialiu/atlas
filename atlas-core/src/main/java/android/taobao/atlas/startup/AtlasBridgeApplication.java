@@ -220,6 +220,7 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.os.Build;
+import android.os.Process;
 import android.taobao.atlas.startup.patch.KernalBundle;
 import android.taobao.atlas.startup.patch.KernalConstants;
 import android.text.TextUtils;
@@ -255,9 +256,6 @@ public class AtlasBridgeApplication extends Application{
         if (!isApplicationNormalCreate(base)) {
             android.os.Process.killProcess(android.os.Process.myPid());
         }
-        if(Build.VERSION.SDK_INT>=24) {
-            replacePathClassLoader();
-        }
         // *0 checkload kernalpatch
         boolean isUpdated = isUpdated(getBaseContext());
         KernalConstants.baseContext = getBaseContext();
@@ -272,11 +270,18 @@ public class AtlasBridgeApplication extends Application{
             if (!isMainProcess) {
                 android.os.Process.killProcess(android.os.Process.myPid());
             }
+            File storageDir = new File(getFilesDir(),"storage");
+            File bundleBaseline = new File(getFilesDir(),"bundleBaseline");
+            deleteDirectory(storageDir);
             KernalVersionManager.instance().removeBaseLineInfo();
+            if(storageDir.exists() || bundleBaseline.exists()){
+                android.os.Process.killProcess(Process.myPid());
+            }
             KernalVersionManager.instance().init();
             System.setProperty("APK_INSTALLED", "true");
         }else{
             KernalVersionManager.instance().init();
+
             if(KernalBundle.hasKernalPatch()) {
                 //has patch ? true -> must load successed
                 hasKernalPatched = KernalBundle.checkloadKernalBundle(this,mInstalledVersionName, getProcessName(getBaseContext()));
@@ -286,6 +291,18 @@ public class AtlasBridgeApplication extends Application{
                         KernalVersionManager.instance().rollbackHardly();
                     }
                     android.os.Process.killProcess(android.os.Process.myPid());
+                }
+                if(Build.VERSION.SDK_INT>=24) {
+                    ClassLoader currentClassLoader = getClassLoader();
+                    replacePathClassLoader();
+                    try {
+                        Class RuntimeVariablesClass = getClassLoader().loadClass("android.taobao.atlas.runtime.RuntimeVariables");
+                        Field rawClassLoaderField = RuntimeVariablesClass.getDeclaredField("sRawClassLoader");
+                        rawClassLoaderField.setAccessible(true);
+                        rawClassLoaderField.set(RuntimeVariablesClass,currentClassLoader);
+                    } catch (Throwable e) {
+                        e.printStackTrace();
+                    }
                 }
             }else{
                 //remove deprecated info
@@ -465,5 +482,23 @@ public class AtlasBridgeApplication extends Application{
                 throw new RuntimeException(e);
             }
         }
+    }
+
+    public void deleteDirectory(final File path) {
+        if(!path.exists()){
+            return;
+        }
+        final File[] files = path.listFiles();
+        if (files == null){
+            return;
+        }
+        for (int i = 0; i < files.length; i++) {
+            if (files[i].isDirectory()) {
+                deleteDirectory(files[i]);
+            } else {
+                files[i].delete();
+            }
+        }
+        path.delete();
     }
 }

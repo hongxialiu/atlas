@@ -604,16 +604,17 @@ public class KernalVersionManager {
         }
     }
 
-    private void killChildProcesses(Context context) {
+    public void killChildProcesses(Context context) {
         try {
+            long uid = context.getApplicationInfo().uid;
             ActivityManager am = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
             List<ActivityManager.RunningAppProcessInfo> a = am.getRunningAppProcesses();
             for (int i = 0; i < a.size(); i++) {
                 ActivityManager.RunningAppProcessInfo b = a.get(i);
-                if (b.processName.contains(context.getPackageName() + ":")) {
+                if(b.uid == uid && !b.processName.equals(context.getPackageName())){
                     android.os.Process.killProcess(b.pid);
-                    continue;
                 }
+
             }
         } catch (Exception e) {
 
